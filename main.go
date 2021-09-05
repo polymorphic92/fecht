@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +8,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
+	"github.com/pterm/pterm"
 )
 
 func main() {
@@ -16,10 +16,8 @@ func main() {
 	repos := make(map[string]*git.Repository)
 	for _, arg := range os.Args[1:] {
 		workspace := getWorkspace(arg)
-		fmt.Printf("WORKSPACE(ARG) :: %v(%v)\n", workspace, arg)
 		findRepos(workspace, repos)
 	}
-	fmt.Printf("\n\n")
 	fetchRepos(repos)
 
 }
@@ -46,17 +44,24 @@ func fetchRepos(repos map[string]*git.Repository) {
 	opts := &git.FetchOptions{
 		RefSpecs: []config.RefSpec{"refs/*:refs/*", "HEAD:refs/heads/HEAD"},
 	}
+	pterm.EnableDebugMessages()
 	numberOfRepos := len(repos)
-	fmt.Printf("Number of Repos: %v\n", numberOfRepos)
+
+	pterm.FgGreen.Println("Number of Repos:", numberOfRepos, "\n")
 	var wg sync.WaitGroup
 	wg.Add(numberOfRepos)
 	for path, repo := range repos {
 		go func(p string, r *git.Repository) {
 			defer wg.Done()
 			fetchErr := r.Fetch(opts)
-			fmt.Printf("Fetched: %v\n", p)
 			if fetchErr != nil {
-				fmt.Printf("\t%v\n", fetchErr)
+				if fetchErr == git.NoErrAlreadyUpToDate {
+					pterm.Info.Println("Repo:", p, fetchErr)
+				} else {
+					pterm.Error.Println("Eccountered error %v whiling fetching %v repo", fetchErr, p)
+				}
+			} else {
+				pterm.Success.Println("Fetched: %v\n", p)
 			}
 
 		}(path, repo)
