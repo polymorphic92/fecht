@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 )
 
 func main() {
@@ -17,10 +18,8 @@ func main() {
 		fmt.Printf("WORKSPACE(ARG) :: %v(%v)\n", workspace, arg)
 		findRepos(workspace, repos)
 	}
-
-	for r := range repos {
-		fmt.Printf("\nREPO :: %v", r)
-	}
+	fmt.Printf("\n\n")
+	fetchRepos(repos)
 
 }
 func checkError(e error) {
@@ -40,6 +39,20 @@ func findRepos(workspace string, repos map[string]*git.Repository) {
 		return nil
 	})
 	checkError(err)
+}
+
+func fetchRepos(repos map[string]*git.Repository) {
+	opts := &git.FetchOptions{
+		RefSpecs: []config.RefSpec{"refs/*:refs/*", "HEAD:refs/heads/HEAD"},
+	}
+
+	for path, repo := range repos {
+		fmt.Printf("Fetching repo : %v\n", path)
+		fetchErr := repo.Fetch(opts)
+		if fetchErr != nil {
+			fmt.Printf("\tissue fetching repo(%v) :: %v\n", path, fetchErr)
+		}
+	}
 }
 
 func getWorkspace(path string) string {
