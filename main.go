@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
@@ -24,7 +25,7 @@ func main() {
 }
 func checkError(e error) {
 	if e != nil {
-		panic(e) // TODO fail gracefully instead
+		panic(e)
 	}
 }
 
@@ -45,14 +46,22 @@ func fetchRepos(repos map[string]*git.Repository) {
 	opts := &git.FetchOptions{
 		RefSpecs: []config.RefSpec{"refs/*:refs/*", "HEAD:refs/heads/HEAD"},
 	}
-
+	numberOfRepos := len(repos)
+	fmt.Printf("Number of Repos: %v\n", numberOfRepos)
+	var wg sync.WaitGroup
+	wg.Add(numberOfRepos)
 	for path, repo := range repos {
-		fmt.Printf("Fetching repo : %v\n", path)
-		fetchErr := repo.Fetch(opts)
-		if fetchErr != nil {
-			fmt.Printf("\tissue fetching repo(%v) :: %v\n", path, fetchErr)
-		}
+		go func(p string, r *git.Repository) {
+			defer wg.Done()
+			fetchErr := r.Fetch(opts)
+			fmt.Printf("Fetched: %v\n", p)
+			if fetchErr != nil {
+				fmt.Printf("\t%v\n", fetchErr)
+			}
+
+		}(path, repo)
 	}
+	wg.Wait()
 }
 
 func getWorkspace(path string) string {
