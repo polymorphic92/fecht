@@ -1,75 +1,53 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"io/ioutil"
-	"log"
 	"os"
-	"os/exec"
-	"sync"
+	"path/filepath"
+	"strings"
+
+	"github.com/go-git/go-git/v5"
 )
 
 func main() {
-	workspace := getWorkspace(os.Args[1])
-	fmt.Println("workspace:", workspace)
-	update(workspace)
+
+	repos := make(map[string]*git.Repository)
+	for _, arg := range os.Args[1:] {
+		workspace := getWorkspace(arg)
+		fmt.Printf("WORKSPACE(ARG) :: %v(%v)\n", workspace, arg)
+		findRepos(workspace, repos)
+	}
+
+	for r := range repos {
+		fmt.Printf("\nREPO :: %v", r)
+	}
 
 }
-
-func check(e error) {
+func checkError(e error) {
 	if e != nil {
-		panic(e)
+		panic(e) // TODO fail gracefully instead
 	}
 }
 
-func getWorkspace(workspace string) string {
-	if dirExists(workspace) {
-		return workspace
-	}
-
-	env := os.Getenv(workspace)
-
-	if dirExists(env) {
-		return env
-	}
-
-	return ""
-}
-
-func dirExists(dir string) bool {
-	info, err := os.Stat(dir)
-	if os.IsNotExist(err) {
-		return false
-	}
-
-	return info.IsDir()
-}
-
-func update(path string) {
-	dirs, err := ioutil.ReadDir(path)
-	check(err)
-	numberOfRepos := len(dirs)
-	var wg sync.WaitGroup
-	fmt.Printf("Repo: %v\n", numberOfRepos)
-	wg.Add(numberOfRepos)
-	for _, dir := range dirs {
-		if dir.IsDir() {
-			fullPath := path + "/" + dir.Name() + "/.git"
-			go func(p string) {
-				defer wg.Done()
-				cmd := exec.Command("git", "--git-dir", p, "remote", "update")
-				var out bytes.Buffer
-				var stderr bytes.Buffer
-				cmd.Stdout = &out
-				cmd.Stderr = &stderr
-				err := cmd.Run()
-				if err != nil {
-					log.Fatalf("cmd failed with:\nstderror: %s\nrepo-path %s", stderr.String(), p)
-				}
-				fmt.Printf("Updated Repo: %s\n", p)
-			}(fullPath)
+func findRepos(workspace string, repos map[string]*git.Repository) {
+	err := filepath.Walk(workspace, func(path string, info os.FileInfo, err error) error {
+		if info.IsDir() && strings.HasSuffix(path, ".git") {
+			r, repoErr := git.PlainOpen(path)
+			if repoErr == nil {
+				repos[path] = r
+			}
 		}
-	}
-	wg.Wait()
+		return nil
+	})
+	checkError(err)
+}
+
+func getWorkspace(path string) string {
+
+	fullPath, err := filepath.Abs(os.ExpandEnv(path))
+	checkError(err)
+	_, err = os.Stat(fullPath)
+	checkError(err)
+
+	return fullPath
 }
